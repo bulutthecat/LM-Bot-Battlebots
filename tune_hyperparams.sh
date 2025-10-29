@@ -3,7 +3,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # --- SCRIPT CONFIGURATION ---
 # The maximum number of python training processes to run at the same time.
-MAX_JOBS=10
+MAX_JOBS=5
 
 # The root directory for all logs and models.
 LOG_DIR_ROOT="./logs_hyper_tuning"
