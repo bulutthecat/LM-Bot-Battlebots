@@ -28,4 +28,4 @@ venv/
 
 
 # hypertuning logs
-logs_hyper_tuning/
+# logs_hyper_tuning/
