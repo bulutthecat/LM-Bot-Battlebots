@@ -14,7 +14,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 # --- SCRIPT CONTROLS ---
-TRAIN_MODEL = False # Set to False to watch a trained model with the GUI
+TRAIN_MODEL = True # Set to False to watch a trained model with the GUI
 MODEL_FILENAME = "ppo_battlebots_agent_v2.zip"
 
 # --- JAVA ENVIRONMENT CONSTANTS ---

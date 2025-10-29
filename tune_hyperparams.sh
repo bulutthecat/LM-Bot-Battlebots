@@ -8,16 +8,25 @@ MAX_JOBS=10
 # The root directory for all logs and models.
 LOG_DIR_ROOT="./logs_hyper_tuning"
 
+# Path to the python executable
+PYTHON_EXEC="./venv/bin/python"
+
 # --- CHECK DEPENDENCIES ---
-if [ ! -f "main.py" ]; then
-    echo "Error: main.py not found in the current directory."
-    echo "Please ensure this script is in the same folder as main.py."
+if [ ! -f "botv2.py" ]; then
+    echo "Error: botv2.py not found in the current directory."
+    echo "Please ensure this script is in the same folder as botv2.py."
     exit 1
 fi
 
-if ! grep -q "TRAIN_MODEL = True" "main.py"; then
-    echo "Error: TRAIN_MODEL is not set to True in main.py."
-    echo "Please edit main.py and set 'TRAIN_MODEL = True' to enable training."
+if ! grep -q "TRAIN_MODEL = True" "botv2.py"; then
+    echo "Error: TRAIN_MODEL is not set to True in botv2.py."
+    echo "Please edit botv2.py and set 'TRAIN_MODEL = True' to enable training."
+    exit 1
+fi
+
+if [ ! -f "$PYTHON_EXEC" ]; then
+    echo "Error: Python executable not found at $PYTHON_EXEC"
+    echo "Please update the PYTHON_EXEC variable in this script."
     exit 1
 fi
 
@@ -117,13 +126,13 @@ launch_run() {
 
     # Add model and log dir args
     final_args+=("--model_name" "$model_file")
-    # This must match the argparse in main.py
+    # This must match the argparse in botv2.py
     final_args+=("--log_dir" "$run_log_dir")
 
     echo "--- LAUNCHING: $run_name (Logging to $run_log_dir/train.log) ---"
 
     # Run in background, redirect stdout and stderr to a log file
-    python main.py "${final_args[@]}" > "${run_log_dir}/train.log" 2>&1 &
+    "$PYTHON_EXEC" botv2.py "${final_args[@]}" > "${run_log_dir}/train.log" 2>&1 &
 }
 
 # --- Main Execution ---
@@ -131,6 +140,7 @@ main() {
     echo "Starting hyperparameter tuning..."
     echo "Max parallel jobs: $MAX_JOBS"
     echo "Log root: $LOG_DIR_ROOT"
+    echo "Python Executable: $PYTHON_EXEC"
     echo "WARNING: This will launch 71 training runs in total."
     echo "You can stop this script at any time with Ctrl+C."
     sleep 3
@@ -203,3 +213,4 @@ main() {
 
 # Start the main function
 main
+
