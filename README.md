@@ -1,7 +1,7 @@
 # LM-Bot-Battlebots
 An LM solution to the common CompSci Battlebots challange, built using a mixture of Java and Python
 
-To get started, setup a virtual environment (reccomended to be named `venv`):
+To get started, setup a virtual environment (recommended to be named `venv`):
 
 ```$ python3 -m venv venv```
 
