@@ -5,6 +5,11 @@ set -e # Exit immediately if a command exits with a non-zero status.
 # The maximum number of python training processes to run at the same time.
 MAX_JOBS=5
 
+# The seed to use for all training runs for reproducible results.
+# Set to a specific number (e.g., 42) to enable.
+# Leave blank (SEED="") to run non-deterministically.
+SEED=42
+
 # The root directory for all logs and models.
 LOG_DIR_ROOT="./logs_hyper_tuning"
 
@@ -129,6 +134,11 @@ launch_run() {
     # This must match the argparse in botv2.py
     final_args+=("--log_dir" "$run_log_dir")
 
+    # *** ADDED: Conditionally add the seed ***
+    if [ -n "$SEED" ]; then
+        final_args+=("--seed" "$SEED")
+    fi
+
     echo "--- LAUNCHING: $run_name (Logging to $run_log_dir/train.log) ---"
 
     # Run in background, redirect stdout and stderr to a log file
@@ -141,6 +151,14 @@ main() {
     echo "Max parallel jobs: $MAX_JOBS"
     echo "Log root: $LOG_DIR_ROOT"
     echo "Python Executable: $PYTHON_EXEC"
+
+    # *** ADDED: Report the seed being used ***
+    if [ -n "$SEED" ]; then
+        echo "--- Using consistent seed for all runs: $SEED ---"
+    else
+        echo "--- Running non-deterministically (no seed set) ---"
+    fi
+    
     echo "WARNING: This will launch 71 training runs in total."
     echo "You can stop this script at any time with Ctrl+C."
     sleep 3
@@ -213,4 +231,3 @@ main() {
 
 # Start the main function
 main
-
