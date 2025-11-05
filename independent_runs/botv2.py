@@ -60,7 +60,7 @@ TRAINING_KWARGS = {
     'bot_speed': BOT_SPEED,
     'bullet_speed': BULLET_SPEED,
     'win_reward': 15.0,            # Bonus for killing all other bots
-    'death_penalty': -20.0,        # Penalty for being killed
+    'death_penalty': -40.0,        # Penalty for being killed
     'kill_reward': 10.0,            # From KILL_SCORE
     'survival_bonus_per_step': 0.3 / FRAMES_PER_SEC, # From POINTS_PER_SECOND
     'wall_penalty': -0.2           # Penalty for hitting wall or bot
@@ -728,7 +728,7 @@ if __name__ == '__main__':
     
     # --- Hyperparameters for Tuning ---
     # We use the commented-out values from your script as the defaults.
-    parser.add_argument('--lr', type=float, default=0.0001,
+    parser.add_argument('--lr', type=float, default=0.00004,
                         help='Initial learning rate (for the linear schedule).')
     parser.add_argument('--gamma', type=float, default=0.99,
                         help='Discount factor gamma.')
@@ -854,7 +854,7 @@ if __name__ == '__main__':
         print("-----------------------------\n")
         
         # <<< CHANGED
-        model.learn(total_timesteps=500_000, progress_bar=True, callback=eval_callback)
+        model.learn(total_timesteps=1_000_000, progress_bar=True, callback=eval_callback)
         model.save(args.model_name) # Save to the specified model name
         
         print(f"--- Training Finished. Final model saved to {args.model_name} ---")

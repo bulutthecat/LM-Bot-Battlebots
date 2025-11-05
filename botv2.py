@@ -9,10 +9,13 @@ from gymnasium import spaces
 from multiprocessing import cpu_count
 from typing import Callable, List, Tuple
 
+import distutils.util
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common.utils import set_random_seed # <--- IMPORTED
+from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.callbacks import EvalCallback # <<< ADDED
 
 # --- SCRIPT CONTROLS ---
 #TRAIN_MODEL = False # Set to False to watch a trained model with the GUI
@@ -27,9 +30,9 @@ ARENA_LEFT = 0.0
 BOT_RADIUS = 13.0
 BOT_DIAMETER = BOT_RADIUS * 2.0
 BOT_SPEED = 3.0
-BULLET_SPEED = 3.0
+BULLET_SPEED = 5.0
 MAX_BULLETS_PER_BOT = 4
-TIME_LIMIT_SECS = 200
+TIME_LIMIT_SECS = 90
 FRAMES_PER_SEC = 30
 MAX_STEPS = TIME_LIMIT_SECS * FRAMES_PER_SEC # 90 seconds * 30fps
 
@@ -50,16 +53,16 @@ TRAINING_KWARGS = {
     'width': ARENA_WIDTH,
     'height': ARENA_HEIGHT,
     'max_steps': 1000, # Shorter episodes for faster training
-    'min_bots': 8,
-    'max_bots': 12,
+    'min_bots': 10,
+    'max_bots': 16,
     'max_bullets_per_bot': MAX_BULLETS_PER_BOT,
     'bot_radius': BOT_RADIUS,
     'bot_speed': BOT_SPEED,
     'bullet_speed': BULLET_SPEED,
     'win_reward': 15.0,            # Bonus for killing all other bots
-    'death_penalty': -12.0,        # Penalty for being killed
+    'death_penalty': -50.0,        # Penalty for being killed
     'kill_reward': 10.0,            # From KILL_SCORE
-    'survival_bonus_per_step': 0.3 / FRAMES_PER_SEC, # From POINTS_PER_SECOND
+    'survival_bonus_per_step': 0.5 / FRAMES_PER_SEC, # From POINTS_PER_SECOND
     'wall_penalty': -0.2           # Penalty for hitting wall or bot
 }
 # Use these harder settings for WATCHING the trained model
@@ -67,8 +70,8 @@ TESTING_KWARGS = {
     'width': ARENA_WIDTH,
     'height': ARENA_HEIGHT,
     'max_steps': MAX_STEPS,
-    'min_bots': 8,
-    'max_bots': 12,
+    'min_bots': 16,
+    'max_bots': 16,
     'max_bullets_per_bot': MAX_BULLETS_PER_BOT,
     'bot_radius': BOT_RADIUS,
     'bot_speed': BOT_SPEED,
@@ -94,6 +97,13 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
     def func(progress_remaining: float) -> float:
         return progress_remaining * initial_value
     return func
+
+def str_to_bool(val):
+        """Converts a string to a boolean."""
+        try:
+            return bool(distutils.util.strtobool(val))
+        except ValueError:
+            return False
 
 class BattleBotsEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
@@ -673,15 +683,14 @@ def draw_entities(screen, env):
     # Draw outline (shows it's the agent)
     pygame.draw.circle(screen, (200, 220, 255), agent_center, int(env.bot_radius), 3)
 
-def run_gui(model, env_kwargs):
+def run_gui(model, env_kwargs, seed=None):
     env = BattleBotsEnv(**env_kwargs)
     screen, clock = initialize_gui()
     
     # --- GUI Seeding (for consistency) ---
     # We can seed the *visualization* env as well,
     # so you see the same starting scenario.
-    # We'll just hardcode a seed here.
-    obs, _ = env.reset(seed=123)
+    obs, _ = env.reset(seed=seed)
     
     running = True
     while running:
@@ -702,7 +711,7 @@ def run_gui(model, env_kwargs):
             elif terminated:
                 print("--- AGENT KILLED ---")
             time.sleep(1.0)
-            obs, _ = env.reset(seed=123) # Re-seed to get same start
+            obs, _ = env.reset(seed=seed) # Re-seed to get same start
         clock.tick(FRAME_RATE)
     pygame.quit()
 
@@ -741,9 +750,10 @@ if __name__ == '__main__':
                         help='Filename for saving the trained model.')
     parser.add_argument('--log_dir', type=str, default="./ppo_battlebots_tensorboard/",
                         help='Tensorboard log directory.')
-    parser.add_argument('--train_model', type=bool, default=True,
-                        help='Enables Visualization / Training mode')
-
+    
+    parser.add_argument('--train_model', type=str_to_bool, default=True,
+                        help='Enables Visualization / Training mode (e.g., true or false)')
+    
     # --- NEW ARGUMENT FOR SEEDING ---
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed for reproducible training. If not set, run will be non-deterministic.')
@@ -776,10 +786,22 @@ if __name__ == '__main__':
         print(f"Logging to: {run_log_dir}")
         print(f"Saving model to: {args.model_name}")
         
-        # --- MODIFIED ENV CREATION ---
+        # --- TRAINING ENV CREATION ---
         env = make_vec_env(BattleBotsEnv, n_envs=num_cpu,
                            vec_env_cls=SubprocVecEnv, 
                            **vec_env_kwargs) # Pass kwargs dict
+        
+        # --- Create a separate evaluation environment ---  # <<< ADDED START
+        print("Creating evaluation environment...")
+        # Use TESTING_KWARGS for evaluation to see how it does on the "real" task
+        eval_kwargs = {"env_kwargs": TESTING_KWARGS}
+        if args.seed is not None:
+            # Use a different seed for eval env to prevent "overfitting" to the eval set
+            eval_kwargs['seed'] = args.seed + 1 
+        
+        # We only need one environment for evaluation
+        eval_env = make_vec_env(BattleBotsEnv, n_envs=1, **eval_kwargs)
+        # <<< ADDED END
         
         policy_kwargs = dict(net_arch=dict(pi=[256, 512, 256], vf=[256, 256]))
         
@@ -789,9 +811,12 @@ if __name__ == '__main__':
                     
                     # --- Tuned Hyperparameters ---
                     #learning_rate=linear_schedule(args.lr),
-                    learning_rate=args.lr,
-                    n_steps=512,
-                    n_epochs=4,
+                    #learning_rate=args.lr,
+                    learning_rate=linear_schedule(args.lr),
+                    # n_steps=256,
+                    # n_epochs=4,
+                    n_steps=2048,
+                    n_epochs=10,
                     batch_size=64,
                     gamma=args.gamma,
                     gae_lambda=args.gae_lambda,
@@ -802,6 +827,20 @@ if __name__ == '__main__':
                     
                     # device='cpu' # Force CPU, as it's often faster for MlpPolicy
                     )
+        
+        # --- Create the Evaluation Callback --- # <<< ADDED START
+        # It will save the best model inside your unique run log directory
+        best_model_save_dir = os.path.join(run_log_dir, "best_model")
+        print(f"Best model will be saved to: {best_model_save_dir}")
+
+        eval_callback = EvalCallback(eval_env, 
+                                 best_model_save_path=best_model_save_dir,
+                                 log_path=best_model_save_dir, 
+                                 eval_freq=10000, # Check every 10,000 steps
+                                 n_eval_episodes=5, # Run 5 episodes for eval
+                                 deterministic=True,
+                                 render=False)
+        # <<< ADDED END
         
         print(f"\n--- RUNNING WITH PARAMS ---")
         print(f"  lr: {args.lr}")
@@ -814,18 +853,15 @@ if __name__ == '__main__':
         print(f"  seed: {args.seed}") # Print the seed
         print("-----------------------------\n")
         
-        model.learn(total_timesteps=500_000, progress_bar=True)
+        # <<< CHANGED
+        model.learn(total_timesteps=1_000_000, progress_bar=True, callback=eval_callback)
         model.save(args.model_name) # Save to the specified model name
         
-        print(f"--- Training Finished. Model saved to {args.model_name} ---")
+        print(f"--- Training Finished. Final model saved to {args.model_name} ---")
+        print(f"Best model saved in {best_model_save_dir}")
         print("Set TRAIN_MODEL to False to watch the agent.")
     else:
-        # --- Visualization Logic (unchanged) ---
-        
-        # Note: If you want to watch a *specific* tuned model,
-        # you must change MODEL_FILENAME at the top of the script
-        # to match the one you want to load.
-        # Or, you could update this 'else' block to use args.model_name.
+        # --- Visualization Logic ---
         
         watch_model = MODEL_FILENAME
         if args.model_name != MODEL_FILENAME:
@@ -837,4 +873,4 @@ if __name__ == '__main__':
             print(f"Error: Model file '{watch_model}' not found. Please train first.")
         else:
             model = PPO.load(watch_model)
-            run_gui(model, env_kwargs=TESTING_KWARGS)
+            run_gui(model, env_kwargs=TESTING_KWARGS, seed=args.seed)
