@@ -1,12 +1,24 @@
 import os
+import sys  # <-- Added this import
 import numpy as np
 from flask import Flask, request, jsonify
 from stable_baselines3 import PPO
 
 
-
 MODEL_FILENAME = "best_model.zip"
 
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        # sys._MEIPASS is the path to that temporary folder
+        base_path = sys._MEIPASS
+    except Exception:
+        # If not running in a PyInstaller bundle, default to the script's directory
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 ARENA_WIDTH = 1000.0
@@ -18,11 +30,9 @@ BOT_DIAMETER = BOT_RADIUS * 2.0
 MAX_BULLETS_PER_BOT = 4
 
 
-
 TESTING_KWARGS = {
     'max_bots': 16,
 }
-
 
 
 MAX_BOTS = TESTING_KWARGS['max_bots']
@@ -37,7 +47,7 @@ MAX_Y = ARENA_HEIGHT - BOT_DIAMETER
 
 app = Flask(__name__)
 model = None
-g_prev_obs = None 
+g_prev_obs = None
 
 def _build_obs_from_json(data: dict) -> np.ndarray:
     """
@@ -166,17 +176,24 @@ def predict_action():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    if not os.path.exists(MODEL_FILENAME):
-        print(f"Error: Model file '{MODEL_FILENAME}' not found.")
+    
+    # Get the correct path to the model file
+    model_path = resource_path(MODEL_FILENAME)
+    print(f"--- Attempting to load model from: {model_path} ---")
+
+    if not os.path.exists(model_path):
+        print(f"Error: Model file '{model_path}' not found.")
         print("Please train the model first by running main.py with TRAIN_MODEL=True")
+        # Added a sys.exit(1) here to stop the script if the model is missing
+        sys.exit(1) 
     else:
         print(f"--- Loading model {MODEL_FILENAME}... ---")
-        model = PPO.load(MODEL_FILENAME)
+        model = PPO.load(model_path)
         print("--- Model loaded. Starting server... ---")
         
         print("\nServer is running. Your Java program can now send requests to:")
         print("  POST http://127.0.0.1:5000/reset   (at the start of an episode)")
-        print("  POST http://127.0.0.1:5000/predict (for every frame after)")
+        print("  POST http://12V-Bot-Battlebots-main-Bot-Battlebots-main\dist.0.0.1:5000/predict (for every frame after)")
         
         
         
